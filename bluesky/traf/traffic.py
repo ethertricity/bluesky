@@ -1,18 +1,16 @@
 """ BlueSky traffic implementation."""
 from __future__ import print_function
 import numpy as np
+import bluesky as bs
 from math import *
 from random import random, randint
-import bluesky as bs
 from bluesky.tools import datalog, geo
 from bluesky.tools.misc import latlon2txt
 from bluesky.tools.aero import fpm, kts, ft, g0, Rearth, nm, \
-                         vatmos,  vtas2cas, vtas2mach, casormach, vcasormach
-
-from bluesky.tools.dynamicarrays import DynamicArrays, RegisterElementParameters
-
+    vatmos, vtas2cas, vtas2mach, casormach, vcasormach
+from bluesky.tools.dynamicarrays import DynamicArrays, \
+    RegisterElementParameters
 from .windsim import WindSim
-
 from .trails import Trails
 from .adsbmodel import ADSB
 from .asas import ASAS
@@ -25,7 +23,13 @@ from .area import Area
 from bluesky import settings
 
 # Register settings defaults
-settings.set_variable_defaults(performance_model='bluesky', snapdt=1.0, instdt=1.0, skydt=1.0, asas_pzr=5.0, asas_pzh=1000.0)
+settings.set_variable_defaults(
+    performance_model='bluesky',
+    snapdt=1.0,
+    instdt=1.0,
+    skydt=1.0,
+    asas_pzr=5.0,
+    asas_pzh=1000.0)
 
 try:
     if settings.performance_model == 'bluesky':
@@ -63,83 +67,99 @@ class Traffic(DynamicArrays):
 
         # Define the periodic loggers
         # ToDo: explain what these line sdo in comments (type of logs?)
-        datalog.definePeriodicLogger('SNAPLOG', 'SNAPLOG logfile.', settings.snapdt)
-        datalog.definePeriodicLogger('INSTLOG', 'INSTLOG logfile.', settings.instdt)
-        datalog.definePeriodicLogger('SKYLOG', 'SKYLOG logfile.', settings.skydt)
+        datalog.definePeriodicLogger(
+            'SNAPLOG', 'SNAPLOG logfile.', settings.snapdt)
+        datalog.definePeriodicLogger(
+            'INSTLOG', 'INSTLOG logfile.', settings.instdt)
+        datalog.definePeriodicLogger(
+            'SKYLOG', 'SKYLOG logfile.', settings.skydt)
 
         with RegisterElementParameters(self):
-
             # Register the following parameters for logging
             with datalog.registerLogParameters('SNAPLOG', self):
                 # Aircraft Info
-                self.id      = []  # identifier (string)
-                self.type    = []  # aircaft type (string)
+                self.id = []  # identifier (string)
+                self.type = []  # aircaft type (string)
 
                 # Positions
-                self.lat     = np.array([])  # latitude [deg]
-                self.lon     = np.array([])  # longitude [deg]
-                self.alt     = np.array([])  # altitude [m]
-                self.hdg     = np.array([])  # traffic heading [deg]
-                self.trk     = np.array([])  # track angle [deg]
+                self.lat = np.array([])  # latitude [deg]
+                self.lon = np.array([])  # longitude [deg]
+                self.alt = np.array([])  # altitude [m]
+                self.hdg = np.array([])  # traffic heading [deg]
+                self.trk = np.array([])  # track angle [deg]
 
                 # Velocities
-                self.tas     = np.array([])  # true airspeed [m/s]
-                self.gs      = np.array([])  # ground speed [m/s]
+                self.tas = np.array([])      # true airspeed [m/s]
+                self.gs = np.array([])       # ground speed [m/s]
                 self.gsnorth = np.array([])  # ground speed [m/s]
-                self.gseast  = np.array([])  # ground speed [m/s]
-                self.cas     = np.array([])  # calibrated airspeed [m/s]
-                self.M       = np.array([])  # mach number
-                self.vs      = np.array([])  # vertical speed [m/s]
+                self.gseast = np.array([])   # ground speed [m/s]
+                self.cas = np.array([])      # calibrated airspeed [m/s]
+                self.M = np.array([])        # mach number
+                self.vs = np.array([])       # vertical speed [m/s]
 
                 # Atmosphere
-                self.p       = np.array([])  # air pressure [N/m2]
-                self.rho     = np.array([])  # air density [kg/m3]
-                self.Temp    = np.array([])  # air temperature [K]
-                self.dtemp   = np.array([])  # delta t for non-ISA conditions
+                self.p = np.array([])      # air pressure [N/m2]
+                self.rho = np.array([])    # air density [kg/m3]
+                self.Temp = np.array([])   # air temperature [K]
+                self.dtemp = np.array([])  # delta t for non-ISA conditions
 
                 # Traffic autopilot settings
-                self.aspd   = np.array([])  # selected spd(CAS) [m/s]
-                self.aptas  = np.array([])  # just for initializing
-                self.ama    = np.array([])  # selected spd above crossover altitude (Mach) [-]
-                self.apalt  = np.array([])  # selected alt[m]
-                self.avs    = np.array([])  # selected vertical speed [m/s]
+                self.aspd = np.array([])   # selected spd(CAS) [m/s]
+                self.aptas = np.array([])  # just for initializing
+                # selected spd above crossover altitude (Mach) [-]
+                self.ama = np.array([])
+                self.apalt = np.array([])  # selected alt[m]
+                self.avs = np.array([])    # selected vertical speed [m/s]
 
             # Whether to perform LNAV and VNAV
-            self.swlnav   = np.array([], dtype=np.bool)
-            self.swvnav   = np.array([], dtype=np.bool)
+            self.swlnav = np.array([], dtype=np.bool)
+            self.swvnav = np.array([], dtype=np.bool)
 
             # Flight Models
-            self.asas   = ASAS()
-            self.ap     = Autopilot()
-            self.pilot  = Pilot()
-            self.adsb   = ADSB()
+            self.asas = ASAS()
+            self.ap = Autopilot()
+            self.pilot = Pilot()
+            self.adsb = ADSB()
             self.trails = Trails()
-            self.actwp  = ActiveWaypoint()
+            self.actwp = ActiveWaypoint()
 
             # Traffic performance data
-            self.avsdef = np.array([])  # [m/s]default vertical speed of autopilot
-            self.aphi   = np.array([])  # [rad] bank angle setting of autopilot
-            self.ax     = np.array([])  # [m/s2] absolute value of longitudinal accelleration
-            self.bank   = np.array([])  # nominal bank angle, [radian]
-            self.hdgsel = np.array([], dtype=np.bool)  # determines whether aircraft is turning
+            # [m/s]default vertical speed of autopilot
+            self.avsdef = np.array([])
+            # [rad] bank angle setting of autopilot
+            self.aphi = np.array([])
+            # [m/s2] absolute value of longitudinal accelleration
+            self.ax = np.array([])
+            # nominal bank angle, [radian]
+            self.bank = np.array([])
+            # determines whether aircraft is turning
+            self.hdgsel = np.array([], dtype=np.bool)
 
             # Crossover altitude
-            self.abco   = np.array([])
-            self.belco  = np.array([])
+            self.abco = np.array([])
+            self.belco = np.array([])
 
-            # limit settings
-            self.limspd      = np.array([])  # limit speed
-            self.limspd_flag = np.array([], dtype=np.bool)  # flag for limit spd - we have to test for max and min
-            self.limalt      = np.array([])  # limit altitude
-            self.limvs       = np.array([])  # limit vertical speed due to thrust limitation
-            self.limvs_flag  = np.array([])
+            # Limit settings
+
+            # limit speed
+            self.limspd = np.array([])
+            # flag for limit spd - we have to test for max and min
+            self.limspd_flag = np.array([], dtype=np.bool)
+            # limit altitude
+            self.limalt = np.array([])
+            # limit vertical speed due to thrust limitation
+            self.limvs = np.array([])
+            self.limvs_flag = np.array([])
 
             # Display information on label
-            self.label       = []  # Text and bitmap of traffic label
+            # Text and bitmap of traffic label
+            self.label = []
 
             # Miscallaneous
-            self.coslat = np.array([])  # Cosine of latitude for computations
-            self.eps    = np.array([])  # Small nonzero numbers
+            # Cosine of latitude for computations
+            self.coslat = np.array([])
+            # Small nonzero numbers
+            self.eps = np.array([])
 
         # Default bank angles per flight phase
         self.bphase = np.deg2rad(np.array([15, 35, 35, 35, 15, 45]))
@@ -156,7 +176,7 @@ class Traffic(DynamicArrays):
         self.wind.clear()
 
         # Build new modules for area and turbulence
-        self.area       = Area()
+        self.area = Area()
         self.Turbulence = Turbulence()
 
         # Noise (turbulence, ADBS-transmission noise, ADSB-truncated effect)
@@ -165,7 +185,7 @@ class Traffic(DynamicArrays):
         # Default: BlueSky internal performance model.
         # Insert your BADA files to the folder "BlueSky/data/coefficients/BADA"
         # for working with EUROCONTROL`s Base of Aircraft Data revision 3.12
-        self.perf    = Perf()
+        self.perf = Perf()
         self.trails.reset()
 
     def mcreate(self, count, actype=None, alt=None, spd=None, dest=None):
@@ -197,47 +217,54 @@ class Traffic(DynamicArrays):
             acspds.append((randint(250, 450) * kts) if spd is None else spd)
 
         # Aircraft Info
-        self.id[-n:]   = acids
+        self.id[-n:] = acids
         self.type[-n:] = [actype] * n
 
         # Positions
-        self.lat[-n:]  = aclats
-        self.lon[-n:]  = aclons
-        self.alt[-n:]  = acalts
+        self.lat[-n:] = aclats
+        self.lon[-n:] = aclons
+        self.alt[-n:] = acalts
 
-        self.hdg[-n:]  = achdgs
-        self.trk[-n:]  = achdgs
+        self.hdg[-n:] = achdgs
+        self.trk[-n:] = achdgs
 
         # Velocities
         self.tas[-n:], self.cas[-n:], self.M[-n:] = vcasormach(acspds, acalts)
-        self.gs[-n:]      = self.tas[-n:]
+        self.gs[-n:] = self.tas[-n:]
         self.gsnorth[-n:] = self.tas[-n:] * np.cos(np.radians(self.hdg[-n:]))
-        self.gseast[-n:]  = self.tas[-n:] * np.sin(np.radians(self.hdg[-n:]))
+        self.gseast[-n:] = self.tas[-n:] * np.sin(np.radians(self.hdg[-n:]))
 
         # Atmosphere
         self.p[-n:], self.rho[-n:], self.Temp[-n:] = vatmos(acalts)
 
         # Wind
         if self.wind.winddim > 0:
-            vnwnd, vewnd     = self.wind.getdata(self.lat[-n:], self.lon[-n:], self.alt[-n:])
+            vnwnd, vewnd = self.wind.getdata(
+                self.lat[-n:], self.lon[-n:], self.alt[-n:])
             self.gsnorth[-n:] = self.gsnorth[-n:] + vnwnd
-            self.gseast[-n:]  = self.gseast[-n:]  + vewnd
-            self.trk[-n:]     = np.degrees(np.arctan2(self.gseast[-n:], self.gsnorth[-n:]))
-            self.gs[-n:]      = np.sqrt(self.gsnorth[-n:]**2 + self.gseast[-n:]**2)
+            self.gseast[-n:] = self.gseast[-n:] + vewnd
+            self.trk[-n:] = np.degrees(np.arctan2(self.gseast[-n:],
+                                                  self.gsnorth[-n:]))
+            self.gs[-n:] = np.sqrt(self.gsnorth[-n:]**2 + self.gseast[-n:]**2)
 
         # Traffic performance data
-        #(temporarily default values)
-        self.avsdef[-n:] = 1500. * fpm   # default vertical speed of autopilot
-        self.aphi[-n:]   = np.radians(25.)  # bank angle setting of autopilot
-        self.ax[-n:]     = kts           # absolute value of longitudinal accelleration
-        self.bank[-n:]   = np.radians(25.)
+        # (temporarily default values)
+        #
+        # default vertical speed of autopilot
+        self.avsdef[-n:] = 1500. * fpm
+        # bank angle setting of autopilot
+        self.aphi[-n:] = np.radians(25.)
+        # absolute value of longitudinal accelleration
+        self.ax[-n:] = kts
+        self.bank[-n:] = np.radians(25.)
 
         # Crossover altitude
-        self.abco[-n:]   = 0  # not necessary to overwrite 0 to 0, but leave for clarity
-        self.belco[-n:]  = 1
+        # not necessary to overwrite 0 to 0, but leave for clarity
+        self.abco[-n:] = 0
+        self.belco[-n:] = 1
 
         # Traffic autopilot settings
-        self.aspd[-n:]  = self.cas[-n:]
+        self.aspd[-n:] = self.cas[-n:]
         self.aptas[-n:] = self.tas[-n:]
         self.apalt[-n:] = self.alt[-n:]
 
@@ -245,7 +272,8 @@ class Traffic(DynamicArrays):
         self.label[-n:] = ['', '', '', 0]
 
         # Miscallaneous
-        self.coslat[-n:] = np.cos(np.radians(aclats))  # Cosine of latitude for flat-earth aproximations
+        # Cosine of latitude for flat-earth aproximations
+        self.coslat[-n:] = np.cos(np.radians(aclats))
         self.eps[-n:] = 0.01
 
         # ----- Submodules of Traffic -----
@@ -258,12 +286,14 @@ class Traffic(DynamicArrays):
         self.perf.create(n)
         self.trails.create(n)
 
-    def create(self, acid=None, actype="B744", aclat=None, aclon=None, achdg=None, acalt=None, casmach=None):
+    def create(self, acid=None, actype="B744", aclat=None,
+               aclon=None, achdg=None, acalt=None, casmach=None):
         """Create an aircraft"""
 
         # Check if not already exist
         if self.id.count(acid.upper()) > 0:
-            return False, acid + " already exists."  # already exists do nothing
+            # already exists do nothing
+            return False, acid + " already exists."
 
         # Catch missing acid, replace by a default
         if acid is None or acid == "*":
@@ -277,7 +307,7 @@ class Traffic(DynamicArrays):
         if actype is None or aclat is None or aclon is None or achdg is None \
                 or acalt is None or casmach is None:
 
-            return False, "CRE: Missing one or more arguments:"\
+            return False, "CRE: Missing one or more arguments:" \
                           "acid,actype,aclat,aclon,achdg,acalt,acspd"
 
         super(Traffic, self).create()
@@ -286,47 +316,53 @@ class Traffic(DynamicArrays):
         self.ntraf = self.ntraf + 1
 
         # Aircraft Info
-        self.id[-1]   = acid.upper()
+        self.id[-1] = acid.upper()
         self.type[-1] = actype
 
         # Positions
-        self.lat[-1]  = aclat
-        self.lon[-1]  = aclon
-        self.alt[-1]  = acalt
+        self.lat[-1] = aclat
+        self.lon[-1] = aclon
+        self.alt[-1] = acalt
 
-        self.hdg[-1]  = achdg
-        self.trk[-1]  = achdg
+        self.hdg[-1] = achdg
+        self.trk[-1] = achdg
 
         # Velocities
         self.tas[-1], self.cas[-1], self.M[-1] = casormach(casmach, acalt)
-        self.gs[-1]      = self.tas[-1]
+        self.gs[-1] = self.tas[-1]
         self.gsnorth[-1] = self.tas[-1] * cos(radians(self.hdg[-1]))
-        self.gseast[-1]  = self.tas[-1] * sin(radians(self.hdg[-1]))
+        self.gseast[-1] = self.tas[-1] * sin(radians(self.hdg[-1]))
 
         # Atmosphere
         self.p[-1], self.rho[-1], self.Temp[-1] = vatmos(acalt)
 
         # Wind
         if self.wind.winddim > 0:
-            vnwnd, vewnd     = self.wind.getdata(self.lat[-1], self.lon[-1], self.alt[-1])
+            vnwnd, vewnd = self.wind.getdata(
+                self.lat[-1], self.lon[-1], self.alt[-1])
             self.gsnorth[-1] = self.gsnorth[-1] + vnwnd
-            self.gseast[-1]  = self.gseast[-1]  + vewnd
-            self.trk[-1]     = np.degrees(np.arctan2(self.gseast[-1], self.gsnorth[-1]))
-            self.gs[-1]      = np.sqrt(self.gsnorth[-1]**2 + self.gseast[-1]**2)
+            self.gseast[-1] = self.gseast[-1] + vewnd
+            self.trk[-1] = np.degrees(np.arctan2(self.gseast[-1],
+                                                 self.gsnorth[-1]))
+            self.gs[-1] = np.sqrt(self.gsnorth[-1]**2 + self.gseast[-1]**2)
 
         # Traffic performance data
-        #(temporarily default values)
-        self.avsdef[-1] = 1500. * fpm   # default vertical speed of autopilot
-        self.aphi[-1]   = radians(25.)  # bank angle setting of autopilot
-        self.ax[-1]     = kts           # absolute value of longitudinal accelleration
-        self.bank[-1]   = radians(25.)
+        # (temporarily default values)
+        # default vertical speed of autopilot
+        self.avsdef[-1] = 1500. * fpm
+        # bank angle setting of autopilot
+        self.aphi[-1] = radians(25.)
+        # absolute value of longitudinal accelleration
+        self.ax[-1] = kts
+        self.bank[-1] = radians(25.)
 
         # Crossover altitude
-        self.abco[-1]   = 0  # not necessary to overwrite 0 to 0, but leave for clarity
-        self.belco[-1]  = 1
+        # not necessary to overwrite 0 to 0, but leave for clarity
+        self.abco[-1] = 0
+        self.belco[-1] = 1
 
         # Traffic autopilot settings
-        self.aspd[-1]  = self.cas[-1]
+        self.aspd[-1] = self.cas[-1]
         self.aptas[-1] = self.tas[-1]
         self.apalt[-1] = self.alt[-1]
 
@@ -334,7 +370,8 @@ class Traffic(DynamicArrays):
         self.label[-1] = ['', '', '', 0]
 
         # Miscallaneous
-        self.coslat[-1] = cos(radians(aclat))  # Cosine of latitude for flat-earth aproximations
+        # Cosine of latitude for flat-earth aproximations
+        self.coslat[-1] = cos(radians(aclat))
         self.eps[-1] = 0.01
 
         # ----- Submodules of Traffic -----
@@ -349,51 +386,53 @@ class Traffic(DynamicArrays):
 
         return True
 
-    def creconfs(self, acid, actype, targetidx, dpsi, cpa, tlosh, dH=None, tlosv=None, spd=None):
-        latref  = self.lat[targetidx]  # deg
-        lonref  = self.lon[targetidx]  # deg
-        altref  = self.alt[targetidx]  # m
-        trkref  = radians(self.trk[targetidx])
-        gsref   = self.gs[targetidx]   # m/s
-        vsref   = self.vs[targetidx]   # m/s
-        cpa     = cpa * nm
-        pzr     = settings.asas_pzr * nm
-        pzh     = settings.asas_pzh * ft
+    def creconfs(self, acid, actype, targetidx, dpsi, cpa,
+                 tlosh, dH=None, tlosv=None, spd=None):
+        latref = self.lat[targetidx]  # deg
+        lonref = self.lon[targetidx]  # deg
+        altref = self.alt[targetidx]  # m
+        trkref = radians(self.trk[targetidx])
+        gsref = self.gs[targetidx]   # m/s
+        vsref = self.vs[targetidx]   # m/s
+        cpa = cpa * nm
+        pzr = settings.asas_pzr * nm
+        pzh = settings.asas_pzh * ft
 
-        trk     = trkref + radians(dpsi)
-        gs      = gsref if spd is None else spd
+        trk = trkref + radians(dpsi)
+        gs = gsref if spd is None else spd
         if dH is None:
             acalt = altref
-            acvs  = 0.0
+            acvs = 0.0
         else:
             acalt = altref + dH
             tlosv = tlosh if tlosv is None else tlosv
-            acvs  = vsref - np.sign(dH) * (abs(dH) - pzh) / tlosv
+            acvs = vsref - np.sign(dH) * (abs(dH) - pzh) / tlosv
 
         # Horizontal relative velocity vector
-        gsn, gse     = gs    * cos(trk),          gs    * sin(trk)
+        gsn, gse = gs * cos(trk), gs * sin(trk)
         vreln, vrele = gsref * cos(trkref) - gsn, gsref * sin(trkref) - gse
         # Relative velocity magnitude
-        vrel    = sqrt(vreln * vreln + vrele * vrele)
+        vrel = sqrt(vreln * vreln + vrele * vrele)
         # Relative travel distance to closest point of approach
-        drelcpa = tlosh * vrel + (0 if cpa > pzr else sqrt(pzr * pzr - cpa * cpa))
+        drelcpa = tlosh * vrel + \
+            (0 if cpa > pzr else sqrt(pzr * pzr - cpa * cpa))
         # Initial intruder distance
-        dist    = sqrt(drelcpa * drelcpa + cpa * cpa)
+        dist = sqrt(drelcpa * drelcpa + cpa * cpa)
         # Rotation matrix diagonal and cross elements for distance vector
-        rd      = drelcpa / dist
-        rx      = cpa / dist
+        rd = drelcpa / dist
+        rx = cpa / dist
         # Rotate relative velocity vector to obtain intruder bearing
-        brn     = degrees(atan2(-rx * vreln + rd * vrele,
-                                 rd * vreln + rx * vrele))
+        brn = degrees(atan2(-rx * vreln + rd * vrele,
+                            rd * vreln + rx * vrele))
 
         # Calculate intruder lat/lon
         aclat, aclon = geo.qdrpos(latref, lonref, brn, dist / nm)
 
         # convert groundspeed to CAS, and track to heading
-        wn, we     = self.wind.getdata(aclat, aclon, acalt)
+        wn, we = self.wind.getdata(aclat, aclon, acalt)
         tasn, tase = gsn - wn, gse - we
-        acspd      = vtas2cas(sqrt(tasn * tasn + tase * tase), acalt)
-        achdg      = degrees(atan2(tase, tasn))
+        acspd = vtas2cas(sqrt(tasn * tasn + tase * tase), acalt)
+        achdg = degrees(atan2(tase, tasn))
 
         # Create and, when necessary, set vertical speed
         self.create(acid, actype, aclat, aclon, achdg, acalt, acspd)
@@ -420,36 +459,36 @@ class Traffic(DynamicArrays):
         return True
 
     def update(self, simt, simdt):
-        # Update only if there is traffic ---------------------
+        # Update only if there is traffic
         if self.ntraf == 0:
             return
 
-        #---------- Atmosphere --------------------------------
+        # Atmosphere
         self.p, self.rho, self.Temp = vatmos(self.alt)
 
-        #---------- ADSB Update -------------------------------
+        # ADSB Update
         self.adsb.update(simt)
 
-        #---------- Fly the Aircraft --------------------------
+        # Fly the Aircraft
         self.ap.update(simt)
         self.asas.update(simt)
         self.pilot.FMSOrAsas()
 
-        #---------- Limit Speeds ------------------------------
+        # Limit Speeds
         self.pilot.FlightEnvelope()
 
-        #---------- Kinematics --------------------------------
+        # Kinematics
         self.UpdateAirSpeed(simdt, simt)
         self.UpdateGroundSpeed(simdt)
         self.UpdatePosition(simdt)
 
-        #---------- Performance Update ------------------------
+        # Performance Update
         self.perf.perf(simt)
 
-        #---------- Simulate Turbulence -----------------------
+        # Simulate Turbulence
         self.Turbulence.Woosh(simdt)
 
-        #---------- Aftermath ---------------------------------
+        # Aftermath
         self.trails.update(simt)
         self.area.check(simt)
         return
@@ -465,56 +504,72 @@ class Traffic(DynamicArrays):
         self.tas = self.tas + swspdsel * ax * np.sign(self.delspd) * simdt
 
         self.cas = vtas2cas(self.tas, self.alt)
-        self.M   = vtas2mach(self.tas, self.alt)
+        self.M = vtas2mach(self.tas, self.alt)
 
         # Turning
-        turnrate = np.degrees(g0 * np.tan(self.bank) / np.maximum(self.tas, self.eps))
-        delhdg   = (self.pilot.hdg - self.hdg + 180.) % 360 - 180.  # [deg]
+        turnrate = np.degrees(
+            g0 *
+            np.tan(
+                self.bank) /
+            np.maximum(
+                self.tas,
+                self.eps))
+
+        delhdg = (self.pilot.hdg - self.hdg + 180.) % 360 - 180.  # [deg]
         self.hdgsel = np.abs(delhdg) > np.abs(2. * simdt * turnrate)
 
         # Update heading
-        self.hdg = (self.hdg + simdt * turnrate * self.hdgsel * np.sign(delhdg)) % 360.
+        self.hdg = (self.hdg + simdt * turnrate * self.hdgsel *
+                    np.sign(delhdg)) % 360.
 
         # Update vertical speed
-        delalt   = self.pilot.alt - self.alt
-        self.swaltsel = np.abs(delalt) > np.maximum(10 * ft, np.abs(2. * simdt * np.abs(self.vs)))
-        self.vs  = self.swaltsel * np.sign(delalt) * np.abs(self.pilot.vs)
+        delalt = self.pilot.alt - self.alt
+        self.swaltsel = np.abs(delalt) > np.maximum(
+            10 * ft, np.abs(2. * simdt * np.abs(self.vs)))
+        self.vs = self.swaltsel * np.sign(delalt) * np.abs(self.pilot.vs)
 
     def UpdateGroundSpeed(self, simdt):
         # Compute ground speed and track from heading, airspeed and wind
         if self.wind.winddim == 0:  # no wind
-            self.gsnorth  = self.tas * np.cos(np.radians(self.hdg))
-            self.gseast   = self.tas * np.sin(np.radians(self.hdg))
+            self.gsnorth = self.tas * np.cos(np.radians(self.hdg))
+            self.gseast = self.tas * np.sin(np.radians(self.hdg))
 
-            self.gs  = self.tas
+            self.gs = self.tas
             self.trk = self.hdg
 
         else:
-            windnorth, windeast = self.wind.getdata(self.lat, self.lon, self.alt)
-            self.gsnorth  = self.tas * np.cos(np.radians(self.hdg)) + windnorth
-            self.gseast   = self.tas * np.sin(np.radians(self.hdg)) + windeast
+            windnorth, windeast = self.wind.getdata(
+                self.lat, self.lon, self.alt)
+            self.gsnorth = self.tas * np.cos(np.radians(self.hdg)) + windnorth
+            self.gseast = self.tas * np.sin(np.radians(self.hdg)) + windeast
 
-            self.gs  = np.sqrt(self.gsnorth**2 + self.gseast**2)
+            self.gs = np.sqrt(self.gsnorth**2 + self.gseast**2)
             self.trk = np.degrees(np.arctan2(self.gseast, self.gsnorth)) % 360.
 
     def UpdatePosition(self, simdt):
         # Update position
-        self.alt = np.where(self.swaltsel, self.alt + self.vs * simdt, self.pilot.alt)
+        self.alt = np.where(
+            self.swaltsel,
+            self.alt + self.vs * simdt,
+            self.pilot.alt)
         self.lat = self.lat + np.degrees(simdt * self.gsnorth / Rearth)
         self.coslat = np.cos(np.deg2rad(self.lat))
-        self.lon = self.lon + np.degrees(simdt * self.gseast / self.coslat / Rearth)
+        self.lon = self.lon + \
+            np.degrees(simdt * self.gseast / self.coslat / Rearth)
 
     def id2idx(self, acid):
         """Find index of aircraft id"""
         try:
             return self.id.index(acid.upper())
-        except:
+        except BaseException:
             return -1
 
     def setNoise(self, noise=None):
-        """Noise (turbulence, ADBS-transmission noise, ADSB-truncated effect)"""
+        """Noise (turbulence, ADBS-transmission noise, ADSB-truncated effect)
+        """
         if noise is None:
-            return True, "Noise is currently " + ("on" if self.Turbulence.active else "off")
+            return True, "Noise is currently " + \
+                ("on" if self.Turbulence.active else "off")
 
         self.Turbulence.SetNoise(noise)
         self.adsb.SetNoise(noise)
@@ -526,54 +581,55 @@ class Traffic(DynamicArrays):
         return
 
     def move(self, idx, lat, lon, alt=None, hdg=None, casmach=None, vspd=None):
-        self.lat[idx]      = lat
-        self.lon[idx]      = lon
+        self.lat[idx] = lat
+        self.lon[idx] = lon
 
         if alt:
-            self.alt[idx]   = alt
+            self.alt[idx] = alt
             self.apalt[idx] = alt
 
         if hdg:
-            self.hdg[idx]  = hdg
+            self.hdg[idx] = hdg
             self.ap.trk[idx] = hdg
 
         if casmach:
             self.tas[idx], self.aspd[-1], dummy = casormach(casmach, alt)
 
         if vspd:
-            self.vs[idx]       = vspd
+            self.vs[idx] = vspd
             self.swvnav[idx] = False
 
     def nom(self, idx):
-        """ Reset acceleration back to nominal (1 kt/s^2): NOM acid """
+        """Reset acceleration back to nominal (1 kt/s^2): NOM acid"""
         self.ax[idx] = kts
 
-    def poscommand(self, idxorwp):# Show info on aircraft(int) or waypoint or airport (str)
-        """POS command: Show info or an aircraft, airport, waypoint or navaid"""
+    def poscommand(self, idxorwp):
+        # Show info on aircraft(int) or waypoint or airport (str)
+        """POS command: Show info or an aircraft, airport, waypoint or navaid
+        """
         # Aircraft index
-        if type(idxorwp)==int and idxorwp >= 0:
+        if isinstance(idxorwp, int) and idxorwp >= 0:
 
-            idx           = idxorwp
-            acid          = self.id[idx]
-            actype        = self.type[idx]
-            latlon        = latlon2txt(self.lat[idx], self.lon[idx])
-            alt           = round(self.alt[idx] / ft)
-            hdg           = round(self.hdg[idx])
-            trk           = round(self.trk[idx])
-            cas           = round(self.cas[idx] / kts)
-            tas           = round(self.tas[idx] / kts)
-            gs            = round(self.gs[idx]/kts)
-            M             = self.M[idx]
-            VS            = round(self.vs[idx]/ft*60.)
-            route         = self.ap.route[idx]
+            idx = idxorwp
+            acid = self.id[idx]
+            actype = self.type[idx]
+            latlon = latlon2txt(self.lat[idx], self.lon[idx])
+            alt = round(self.alt[idx] / ft)
+            hdg = round(self.hdg[idx])
+            trk = round(self.trk[idx])
+            cas = round(self.cas[idx] / kts)
+            tas = round(self.tas[idx] / kts)
+            gs = round(self.gs[idx] / kts)
+            M = self.M[idx]
+            VS = round(self.vs[idx] / ft * 60.)
+            route = self.ap.route[idx]
 
             # Position report
-
-            lines = "Info on %s %s index = %d\n" %(acid, actype, idx)     \
-                  + "Pos: "+latlon+ "\n"                                  \
-                  + "Hdg: %03d   Trk: %03d\n"        %(hdg, trk)              \
-                  + "Alt: %d ft  V/S: %d fpm\n"  %(alt,VS)                \
-                  + "CAS/TAS/GS: %d/%d/%d kts   M: %.3f\n"%(cas,tas,gs,M)
+            lines = "Info on %s %s index = %d\n" % (acid, actype, idx)        \
+                + "Pos: " + latlon + "\n"                                     \
+                + "Hdg: %03d   Trk: %03d\n" % (hdg, trk)                      \
+                + "Alt: %d ft  V/S: %d fpm\n" % (alt, VS)                     \
+                + "CAS/TAS/GS: %d/%d/%d kts   M: %.3f\n" % (cas, tas, gs, M)
 
             # FMS AP modes
             if self.swlnav[idx] and route.nwp > 0 and route.iactwp >= 0:
@@ -585,17 +641,17 @@ class Traffic(DynamicArrays):
 
             # Flight info: Destination and origin
             if self.ap.orig[idx] != "" or self.ap.dest[idx] != "":
-                lines = lines +  "Flying"
+                lines = lines + "Flying"
 
                 if self.ap.orig[idx] != "":
-                    lines = lines +  " from " + self.ap.orig[idx]
+                    lines = lines + " from " + self.ap.orig[idx]
 
                 if self.ap.dest[idx] != "":
-                    lines = lines +  " to " + self.ap.dest[idx]
+                    lines = lines + " to " + self.ap.dest[idx]
 
             # Show a/c info and highlight route of aircraft in radar window
             # and pan to a/c (to show route)
-            return bs.scr.showacinfo(acid,lines)
+            return bs.scr.showacinfo(acid, lines)
 
         # Waypoint: airport, navaid or fix
         else:
@@ -605,40 +661,41 @@ class Traffic(DynamicArrays):
             reflat = bs.scr.ctrlat
             reflon = bs.scr.ctrlon
 
-            lines = "Info on "+wp+":\n"
+            lines = "Info on " + wp + ":\n"
 
             # First try airports (most used and shorter, hence faster list)
             iap = bs.navdb.getaptidx(wp)
-            if iap>=0:
-                aptypes = ["large","medium","small"]
-                lines = lines + bs.navdb.aptname[iap]+"\n"                 \
-                        + "is a "+ aptypes[max(-1,bs.navdb.aptype[iap]-1)] \
-                        +" airport at:\n"                                    \
-                        + latlon2txt(bs.navdb.aptlat[iap],                 \
-                                     bs.navdb.aptlon[iap]) + "\n"          \
-                        + "Elevation: "                                      \
-                        + str(int(round(bs.navdb.aptelev[iap]/ft)))        \
-                        + " ft \n"
+            if iap >= 0:
+                aptypes = ["large", "medium", "small"]
+                lines = lines + bs.navdb.aptname[iap] + "\n"                  \
+                    + "is a " + aptypes[max(-1, bs.navdb.aptype[iap] - 1)]    \
+                    + " airport at:\n"                                        \
+                    + latlon2txt(bs.navdb.aptlat[iap],
+                                 bs.navdb.aptlon[iap]) + "\n"                 \
+                    + "Elevation: "                                           \
+                    + str(int(round(bs.navdb.aptelev[iap] / ft)))             \
+                    + " ft \n"
 
-               # Show country name
+                # Show country name
                 try:
                     ico = bs.navdb.cocode2.index(bs.navdb.aptco[iap].upper())
-                    lines = lines + "in "+bs.navdb.coname[ico]+" ("+      \
-                             bs.navdb.aptco[iap]+")"
-                except:
+                    lines = lines + "in " + bs.navdb.coname[ico] + " (" + \
+                        bs.navdb.aptco[iap] + ")"
+                except BaseException:
                     ico = -1
-                    lines = lines + "Country code: "+bs.navdb.aptco[iap]
+                    lines = lines + "Country code: " + bs.navdb.aptco[iap]
                 try:
-                    runways = bs.navdb.rwythresholds[bs.navdb.aptid[iap]].keys()
+                    runways = bs.navdb.rwythresholds[bs.navdb.aptid[iap]].keys(
+                    )
                     if runways:
                         lines = lines + "\nRunways: " + ", ".join(runways)
-                except:
+                except BaseException:
                     pass
 
             # Not found as airport, try waypoints & navaids
             else:
-                iwps = bs.navdb.getwpindices(wp,reflat,reflon)
-                if iwps[0]>=0:
+                iwps = bs.navdb.getwpindices(wp, reflat, reflon)
+                if iwps[0] >= 0:
                     typetxt = ""
                     desctxt = ""
                     lastdesc = "XXXXXXXX"
@@ -646,109 +703,111 @@ class Traffic(DynamicArrays):
 
                         # One line type text
                         if typetxt == "":
-                            typetxt = typetxt+bs.navdb.wptype[i]
+                            typetxt = typetxt + bs.navdb.wptype[i]
                         else:
-                            typetxt = typetxt+" and "+bs.navdb.wptype[i]
+                            typetxt = typetxt + " and " + bs.navdb.wptype[i]
 
                         # Description: multi-line
-                        samedesc = bs.navdb.wpdesc[i]==lastdesc
+                        samedesc = bs.navdb.wpdesc[i] == lastdesc
                         if desctxt == "":
-                            desctxt = desctxt +bs.navdb.wpdesc[i]
+                            desctxt = desctxt + bs.navdb.wpdesc[i]
                             lastdesc = bs.navdb.wpdesc[i]
                         elif not samedesc:
-                            desctxt = desctxt +"\n"+bs.navdb.wpdesc[i]
+                            desctxt = desctxt + "\n" + bs.navdb.wpdesc[i]
                             lastdesc = bs.navdb.wpdesc[i]
 
                         # Navaid: frequency
-                        if bs.navdb.wptype[i] in ["VOR","DME","TACAN"] and not samedesc:
-                            desctxt = desctxt + " "+ str(bs.navdb.wpfreq[i])+" MHz"
-                        elif bs.navdb.wptype[i]=="NDB" and not samedesc:
-                            desctxt = desctxt+ " " + str(bs.navdb.wpfreq[i])+" kHz"
+                        if bs.navdb.wptype[i] in [
+                                "VOR", "DME", "TACAN"] and not samedesc:
+                            desctxt = desctxt + " " + \
+                                str(bs.navdb.wpfreq[i]) + " MHz"
+                        elif bs.navdb.wptype[i] == "NDB" and not samedesc:
+                            desctxt = desctxt + " " + \
+                                str(bs.navdb.wpfreq[i]) + " kHz"
 
                     iwp = iwps[0]
 
                     # Basic info
-                    lines = lines + wp +" is a "+ typetxt       \
-                           + " at\n"\
-                           + latlon2txt(bs.navdb.wplat[iwp],  \
-                                        bs.navdb.wplon[iwp])
+                    lines = lines + wp + " is a " + typetxt                   \
+                        + " at\n"                                             \
+                        + latlon2txt(bs.navdb.wplat[iwp], bs.navdb.wplon[iwp])
                     # Navaids have description
-                    if len(desctxt)>0:
-                        lines = lines+ "\n" + desctxt
+                    if len(desctxt) > 0:
+                        lines = lines + "\n" + desctxt
 
                     # VOR give variation
-                    if bs.navdb.wptype[iwp]=="VOR":
-                        lines = lines + "\nVariation: "+ \
-                                     str(bs.navdb.wpvar[iwp])+" deg"
-
+                    if bs.navdb.wptype[iwp] == "VOR":
+                        lines = lines + "\nVariation: " + \
+                            str(bs.navdb.wpvar[iwp]) + " deg"
 
                     # How many others?
-                    nother = bs.navdb.wpid.count(wp)-len(iwps)
-                    if nother>0:
-                        verb = ["is ","are "][min(1,max(0,nother-1))]
-                        lines = lines +"\nThere "+verb + str(nother) +\
-                                   " other waypoint(s) also named " + wp
+                    nother = bs.navdb.wpid.count(wp) - len(iwps)
+                    if nother > 0:
+                        verb = ["is ", "are "][min(1, max(0, nother - 1))]
+                        lines = lines + "\nThere " + verb + str(nother) + \
+                            " other waypoint(s) also named " + wp
 
                     # In which airways?
-                    connect = bs.navdb.listconnections(wp, \
-                                                bs.navdb.wplat[iwp],
-                                                bs.navdb.wplon[iwp])
-                    if len(connect)>0:
+                    connect = bs.navdb.listconnections(wp,
+                                                       bs.navdb.wplat[iwp],
+                                                       bs.navdb.wplon[iwp])
+                    if len(connect) > 0:
                         awset = set([])
                         for c in connect:
                             awset.add(c[0])
 
-                        lines = lines+"\nAirways: "+"-".join(awset)
+                        lines = lines + "\nAirways: " + "-".join(awset)
 
-
-               # Try airway id
+                # Try airway id
                 else:  # airway
                     awid = wp
                     airway = bs.navdb.listairway(awid)
-                    if len(airway)>0:
+                    if len(airway) > 0:
                         lines = ""
                         for segment in airway:
-                            lines = lines+"Airway "+ awid + ": " + \
-                                    " - ".join(segment)+"\n"
-                        lines = lines[:-1] # cut off final newline
+                            lines = lines + "Airway " + awid + ": " + \
+                                " - ".join(segment) + "\n"
+                        lines = lines[:-1]  # cut off final newline
                     else:
-                        return False,idxorwp+" not found as a/c, airport, navaid or waypoint"
+                        return False, idxorwp + \
+                            " not found as a/c, airport, navaid or waypoint"
 
             # Show what we found on airport and navaid/waypoint
             bs.scr.echo(lines)
 
         return True
 
-    def airwaycmd(self,key=""):
+    def airwaycmd(self, key=""):
         # Show conections of a waypoint
 
         reflat = bs.scr.ctrlat
         reflon = bs.scr.ctrlon
 
-        if key=="":
-            return False,'AIRWAY needs waypoint or airway'
+        if key == "":
+            return False, 'AIRWAY needs waypoint or airway'
 
-        if bs.navdb.awid.count(key)>0:
+        if bs.navdb.awid.count(key) > 0:
             return self.poscommand(key.upper())
         else:
             # Find connecting airway legs
             wpid = key.upper()
-            iwp = bs.navdb.getwpidx(wpid,reflat,reflon)
-            if iwp<0:
-                return False,key + " not found."
+            iwp = bs.navdb.getwpidx(wpid, reflat, reflon)
+            if iwp < 0:
+                return False, key + " not found."
 
             wplat = bs.navdb.wplat[iwp]
             wplon = bs.navdb.wplon[iwp]
-            connect = bs.navdb.listconnections(key.upper(),wplat,wplon)
-            if len(connect)>0:
+            connect = bs.navdb.listconnections(key.upper(), wplat, wplon)
+            if len(connect) > 0:
                 lines = ""
                 for c in connect:
-                    if len(c)>=2:
+                    if len(c) >= 2:
                         # Add airway, direction, waypoint
-                        lines = lines+ c[0]+": to "+c[1]+"\n"
+                        lines = lines + c[0] + ": to " + c[1] + "\n"
                 return True, lines[:-1]  # exclude final newline
             else:
-                return False,"No airway legs found for ",key
+                return False, "No airway legs found for ", key
+
 
 # Traffic singleton object
 traf = Traffic()
