@@ -1,7 +1,7 @@
 """ BlueSky: The open-source ATM simulator."""
 # from bluesky import settings  #, stack, tools
 from bluesky import settings
-import bluesky.traf as _traf
+from bluesky.traf import traffic
 import bluesky.navdb as _navdb
 
 if settings.gui == 'pygame':
@@ -11,8 +11,8 @@ else:
     import bluesky.sim.qtgl.screenio as _scr
     import bluesky.sim.qtgl.simulation as _sim
 
-### Main singleton objects in BlueSky
-traf  = _traf.traffic.traf
+# Main singleton objects in BlueSky
+traf = traffic.Traffic()
 navdb = _navdb.navdb
-sim   = _sim.sim
-scr   = _scr.scr
+sim = _sim.sim
+scr = _scr.scr
