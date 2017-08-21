@@ -26,13 +26,16 @@ class ActiveWaypoint(DynamicArrays):
         self.flyby[-n:]     = 1.0   # Flyby/fly-over switch
         self.next_qdr[-n:]  = -999.0    # bearing next leg
 
-    def Reached(self, qdr, dist, flyby):
+    def reached(self, qdr, dist, flyby):
         # Calculate distance before waypoint where to start the turn
-        # Turn radius:      R = V2 tan phi / g
+        # Turn radius:      R = V2 / tan phi . g
         # Distance to turn: wpturn = R * tan (1/2 delhdg) but max 4 times radius
         # using default bank angle per flight phase
+
+        # use .eps to avoid divide by zero
         turnrad = bs.traf.tas * bs.traf.tas / \
                       np.maximum(bs.traf.eps, np.tan(bs.traf.bank) * g0 * nm)  # [nm]
+
         next_qdr = np.where(self.next_qdr < -900., qdr, self.next_qdr)
 
         # Avoid circling
