@@ -8,8 +8,8 @@ pep8:
 
 .PHONY: compile
 compile:
-	@python -m pep8 sparkl_cli
-	@python -m pylint --ignore=test sparkl_cli
+	@python -m pep8 bluesky
+	@python -m pylint --ignore=test bluesky
 
 .PHONY: test
 test:
