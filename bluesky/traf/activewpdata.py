@@ -43,7 +43,8 @@ class ActiveWaypoint(DynamicArrays):
 
     def reached(self, qdr, dist, flyby):
         # Calculate distance before waypoint where to start the turn
-        # Turn radius:      R = V2 / tan phi . g
+        # Turn radius:
+        # R = V2 / tan phi . g
         # Distance to turn: wpturn = R * tan (1/2 delhdg) but max 4 times
         # radius using default bank angle per flight phase
 
