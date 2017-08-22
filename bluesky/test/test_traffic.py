@@ -1,4 +1,4 @@
-from ..bluesky.traf import Traffic
+from bluesky.traf import Traffic
 
 
 def test_create_random_planes():
