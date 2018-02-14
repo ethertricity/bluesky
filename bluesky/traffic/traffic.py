@@ -511,10 +511,12 @@ class Traffic(TrafficArrays):
 
     def UpdatePosition(self, simdt):
         # Update position
+
         self.alt = np.where(self.swaltsel, self.alt + self.vs * simdt, self.pilot.alt)
         self.lat = self.lat + np.degrees(simdt * self.gsnorth / Rearth)
         self.coslat = np.cos(np.deg2rad(self.lat))
         self.lon = self.lon + np.degrees(simdt * self.gseast / self.coslat / Rearth)
+
 
     def id2idx(self, acid):
         """Find index of aircraft id"""

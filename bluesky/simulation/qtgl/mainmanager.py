@@ -202,5 +202,5 @@ class MainManager(QObject):
     @classmethod
     def sendEvent(cls, event):
         # Only send custom events to the active node
-        if event.type() >= 1000:
+        if cls.instance.connections[cls.actnode()] and event.type() >= 1000:
             cls.instance.connections[cls.actnode()][0].send((int(event.type()), event))

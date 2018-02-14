@@ -1,7 +1,7 @@
 .PHONY: test
-test:
+test:	orig_data
 	@echo "Running Tests using Python3 BlueSky"
-	@TESTING=true PYEXEC=python3 python3 -m pytest -s bluesky/test
+	@python3 -m pytest -s bluesky/test
 
 lint:
 	@autopep8 --in-place -r bluesky/test

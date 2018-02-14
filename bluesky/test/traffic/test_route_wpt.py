@@ -7,7 +7,7 @@ GNU General Public License v3.
 Author <ahfarrell@sparkl.com> Andrew Farrell
 Tests route module, wpt functionality
 """
-from . import assert_fl
+from .. import assert_fl
 
 
 def print_route(route):

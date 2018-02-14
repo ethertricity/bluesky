@@ -6,56 +6,20 @@ GNU General Public License v3.
 
 Author <ahfarrell@sparkl.com> Andrew Farrell
 Common test functionality.
-
-NOTE - The test suite is written in Python3 only.
-It tests BlueSky running in either Python2 or 3.
 """
 from __future__ import print_function
 import inspect
 import time
-from bluesky.tools.network import as_bytes
 
 
-BLUESKY = "BlueSky_qtgl.py"
-BUFFER_SIZE = 1024
-TCP_HOST = "127.0.0.1"
-TCP_PORT = 8888
-
-
-def sock_connect(socket_, host, port):
+def assert_fl(result, reference, threshold=0.49):
     """
-    Attempts a socket connection, and returns success boolean.
+    Tests whether the absolute (i.e. distance from zero) difference
+    between a result and a reference value is less than a provided threshold.
 
-    Args:
-        socket_: the socket, created with 'socket' method
-        host:: the host
-        port: the port
-
-    Returns:
-        whether socket is connected
+    If not provided, the default threshold of 0.49 is used.
     """
-    try:
-        socket_.connect((host, port))
-        return True
-    except ConnectionRefusedError:
-        return False
-
-
-def sock_send(socket_, msg):
-    """
-        Sends data across socket.
-    """
-    socket_.send(
-        as_bytes(msg + "\n"))
-
-
-def sock_receive(socket_):
-    """
-        Gets data from socket.
-    """
-    data = bytes(socket_.recv(BUFFER_SIZE)).decode('utf8').rstrip()
-    printrecv(data)
-    return data
+    assert abs(float(result) - reference) < threshold
 
 
 def funname(stackpos):
@@ -69,10 +33,19 @@ def funname(stackpos):
     Returns:
         Stack frame function name.
     """
-    return inspect.stack()[stackpos][3]
+    return str(inspect.stack()[stackpos][3])
 
 
 def funname_message(message):
+    """
+    Returns the name of the test function and the
+    success/error message, which is the result of the test.
+
+    E.g.: test_at_setspd_kl204_success:{'msg': '', 'success': 'Ok'}
+
+    Args:
+        message: E.g. {'msg': '', 'success': 'Ok'}
+    """
     return funname(2) + ":" + str(message)
 
 
@@ -86,26 +59,33 @@ def printrecv(data, stackpos=2):
     print("-- {} --: Data received: {}".format(funname(stackpos), data))
 
 
-def wait_for(test, iters, period):
+def wait_for(test, iters=-1, period=1):
     """
     Performs up to `iters` iterations of a `test`, stopping when `test` is True.
     Employs an exponentially increasing wait time between test iterations.
     Args:
         test: The test to perform
-        iters: The number of iterations of `test`
+        iters: The number of iterations of `test`.  -1 means indefinite.
         period: The initial wait period in seconds between test iterations.
 
     Returns:
 
     """
-    if iter == 0:
+    if iters == 0:
         raise BlueSkyTestException()
+    elif iters > 0:
+        iters -= 1
 
     time.sleep(period)  # front-load a sleep
 
-    success = test()
-    if not success:
-        wait_for(test, iters - 1, 2 * period)
+    try:
+        result = test()
+    except:
+        result = False
+
+    if result:
+        return result
+    return wait_for(test, iters, 2 * period)
 
 
 class BlueSkyTestException(Exception):
@@ -114,3 +94,4 @@ class BlueSkyTestException(Exception):
     Simple base exception class for bluesky tests.
     """
     pass
+
